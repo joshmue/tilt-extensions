@@ -1,19 +1,10 @@
 load('ext://global_vars', 'get_global', 'set_global')
 
-def _get_skip():
-    return get_global(_get_skip_name())
+if get_global('HELM_REMOTE_SKIP_CACHE_INVALIDATION') == None:
+    set_global('HELM_REMOTE_SKIP_CACHE_INVALIDATION', 'False')
 
-
-def _set_skip(value):
-    set_global(_get_skip_name(), value)
-
-
-def _get_skip_name():
-    return 'HELM_REMOTE_SKIP_UPDATES'
-
-
-if _get_skip() == None:
-    _set_skip('False')  # Gets set to true after the first update, preventing further updates within the same build/instance/up
+if get_global('HELM_REMOTE_SKIP_UPDATES') == None:
+    set_global('HELM_REMOTE_SKIP_UPDATES', 'False')  # Gets set to true after the first update, preventing further updates within the same build/instance/up
 
 # Find the directory where Tilt loaded modules.
 # This is usually the XDG data directory for tilt data.
@@ -154,13 +145,13 @@ def helm_remote_yaml(chart, repo_url='', repo_name='', release_name='', values=[
             # Add authentication for adding the repository if credentials are provided
             output = str(local(build_helm_command(repo_command, (username, password)), quiet=True)).rstrip('\n')
             if 'already exists' not in output: # repo was added
-                _set_skip('False')
+                set_global('HELM_REMOTE_SKIP_UPDATES', 'False')
         else:
             # Helm is already aware of the chart, update repo (unfortunately you cannot specify a single repo)
-            if _get_skip() != 'True':
+            if get_global('HELM_REMOTE_SKIP_UPDATES') != 'True':
                 repo_command = ['repo', 'update']
                 local(build_helm_command(repo_command), quiet=True)
-                _set_skip('True')
+                set_global('HELM_REMOTE_SKIP_UPDATES', 'True')
 
     # ======== Initialize
     # -------- targets
@@ -168,9 +159,9 @@ def helm_remote_yaml(chart, repo_url='', repo_name='', release_name='', values=[
 
     cached_chart_exists = os.path.exists(chart_target)
 
-    needs_pull = True
+    needs_pull = not cached_chart_exists
 
-    if cached_chart_exists:
+    if cached_chart_exists and get_global('HELM_REMOTE_SKIP_CACHE_INVALIDATION') != 'True':
         # Helm chart structure is concrete, we can trust this YAML file to exist
         cached_chart_details = read_yaml(os.path.join(chart_target, 'Chart.yaml'))
 
